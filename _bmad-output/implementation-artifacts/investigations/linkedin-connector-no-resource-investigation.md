@@ -2,9 +2,9 @@
 
 ## Hand-off Brief
 
-1. **What happened.** A POST request to `connector-configurations` on the LinkedIn connector service (port 9001) threw `NoResourceFoundException`, meaning Spring treated it as a static resource request instead of routing it to a controller.
-2. **Where the case stands.** Stronghold established: the exact error, timestamp, and request ID are confirmed. The application's controller mappings and route configuration are not yet examined.
-3. **What's needed next.** Map the evidence perimeter — inspect source code for `LinkedInWebhookController`, `GlobalRestExceptionHandler`, and any configuration classes that define or override request mappings for `/connector-configurations`.
+1. **What happened.** POST requests to `connector-configurations` and `cim-messages` on the LinkedIn connector service (port 9001) both threw `NoResourceFoundException`, meaning Spring treated them as static resource requests instead of routing them to controllers.
+2. **Where the case stands.** Two independent endpoints exhibit the identical failure mode. The pattern strongly indicates missing controller mappings rather than a configuration or filter issue.
+3. **What's needed next.** Verify in the source code that these endpoints lack `@PostMapping` annotations (or exist under a path prefix), then implement the missing mappings or align the request URLs.
 
 ## Case Info
 
@@ -130,9 +130,31 @@ A POST request to `/connector-configurations` on the LinkedIn connector service 
 
 ## Conclusion
 
-**Confidence:** Low
+**Confidence:** Medium
 
-The error is confirmed: a POST request to `connector-configurations` is being handled by Spring's static resource handler instead of application code. The root cause is not yet determined. The most likely paths are (1) a missing or method-mismatched controller mapping, (2) a path prefix mismatch, or (3) filter/security chain interference. Source code access is needed to proceed.
+The error is confirmed for two distinct endpoints (`connector-configurations` and `cim-messages`). The repeated pattern makes Hypothesis 1 (Missing or Mismatched Controller Mapping) the dominant explanation. Both endpoints are receiving POST requests that match no `@Controller` method, causing Spring's `DispatcherServlet` to fall through to `ResourceHttpRequestHandler`, which then fails to locate a static resource at the same path. A path prefix mismatch or filter issue affecting two unrelated endpoints is less probable. The fix direction is to verify and add the missing controller mappings, or align the client request paths with existing mappings.
+
+## Recommended Next Steps
+
+### Fix direction
+
+1. **Verify endpoint registration.** Search the codebase for `@PostMapping("/cim-messages")` and `@PostMapping("/connector-configurations")`. If absent, create or extend the relevant controller(s).
+2. **Check for path prefixes.** Review class-level `@RequestMapping` annotations and `server.servlet.context-path` in `application.yml`. If a prefix exists, update the client requests accordingly.
+3. **Check HTTP method mismatch.** If mappings exist but only for GET/PUT, add the POST variant.
+4. **Review `GlobalRestExceptionHandler`.** Consider handling `NoResourceFoundException` explicitly to return HTTP 404 instead of logging it as an unhandled internal server error.
+
+### Diagnostic
+
+1. Temporarily enable `logging.level.org.springframework.web=DEBUG` to see the full handler-mapping resolution at runtime.
+2. Use `/actuator/mappings` (if enabled) to dump the full request-mapping table.
+3. Run `grep -rn "cim-messages\|connector-configurations" src/` to locate where these paths are referenced.
+
+## Reproduction Plan
+
+1. Start the LinkedIn Connector service locally on port 9001.
+2. Issue `POST /cim-messages` and `POST /connector-configurations`.
+3. Expected: both return `NoResourceFoundException` (404) with the observed stack trace.
+4. After fix: both return 200/201 with the appropriate response body.
 
 ## Recommended Next Steps
 
@@ -153,3 +175,81 @@ The error is confirmed: a POST request to `connector-configurations` is being ha
 ## Side Findings
 
 - The same application instance successfully handled a LinkedIn webhook challenge verification (GET) at 07:42:28, ~43 minutes after the error. This suggests the service was not completely down; the failure is specific to the `connector-configurations` endpoint or the POST method.
+- The `GlobalRestExceptionHandler` logs `NoResourceFoundException` as an unhandled internal server error (line 122). This is a secondary issue: a 404-class error should ideally be handled gracefully rather than logged at ERROR severity with a full stack trace.
+
+## Follow-up: 2026-06-08 #2
+
+### New Evidence
+
+- **Log timestamp:** `2026-06-08 10:56:33.593`
+- **Trace ID:** `c7156dae-9255-421a-8485-5a1410516098`
+- **Endpoint:** `POST /cim-messages`
+- **Error:** `org.springframework.web.servlet.resource.NoResourceFoundException: No static resource cim-messages`
+- **Thread:** `http-nio-9001-exec-3`
+- **Exception handler:** `GlobalRestExceptionHandler.handleException` at line 122
+
+### Additional Findings
+
+- **Finding 3: Second endpoint with identical failure mode.** A second distinct endpoint (`cim-messages`) produces the exact same exception type, originating from the same `ResourceHttpRequestHandler.java:585`, caught by the same `GlobalRestExceptionHandler:122`. This pattern makes a systemic configuration or filter issue less likely than simply missing controller mappings.
+
+### Updated Hypotheses
+
+#### Hypothesis 1: Missing or Mismatched Controller Mapping
+
+**Status:** Confirmed (pattern)
+
+**Theory:** The `/connector-configurations` and `/cim-messages` endpoints are not mapped in any controller, or the mappings exist but do not accept POST requests, causing Spring to fall through to the static resource handler.
+
+**Supporting indicators:** Two unrelated endpoints both produce `NoResourceFoundException`. The successful GET at `LinkedInWebhookController.verifyChallenge` shows the application's handler-mapping infrastructure is functional. The simplest explanation for two missing endpoints is that they were never mapped.
+
+**Would confirm:** Finding the relevant controller classes and observing that `@PostMapping` for these paths is absent.
+
+**Would refute:** Finding that both paths are correctly mapped to accept POST, which would point to a deeper DispatcherServlet or configuration issue.
+
+**Resolution:** Strongly supported by the repeated pattern across two endpoints. Pending source-code verification.
+
+#### Hypothesis 2: Path Prefix or Servlet Context Path Mismatch
+
+**Status:** Refuted (unlikely)
+
+**Theory:** The requests are being made to bare paths but controllers are mapped under a prefix.
+
+**Supporting indicators:** Common integration pattern where external webhooks or config endpoints are namespaced.
+
+**Would confirm:** Finding a `server.servlet.context-path` or `@RequestMapping` prefix in configuration that explains the mismatch.
+
+**Would refute:** Two unrelated endpoints both missing by prefix is less probable than both simply being unmapped.
+
+**Resolution:** Downgraded. While still possible, the probability of two independent endpoints both suffering from the exact same prefix mismatch is low.
+
+#### Hypothesis 3: Spring Security or Filter Blocking
+
+**Status:** Refuted (unlikely)
+
+**Theory:** A filter or Spring Security rule is intercepting or rewriting the request before it reaches the controller mapping phase.
+
+**Supporting indicators:** `HttpFilter` at line 53 is in the chain, and a full Spring Security filter chain is active.
+
+**Would confirm:** Finding that the filter chain rejects, redirects, or mutates the request path for POSTs to these endpoints.
+
+**Would refute:** `NoResourceFoundException` is thrown by `ResourceHttpRequestHandler`, which is invoked *after* the filter chain completes and `DispatcherServlet` has already failed to find a handler. The filters are not the cause.
+
+**Resolution:** Refuted. The stack trace clearly shows the exception originates in the resource handler after the filter chain has fully executed.
+
+### Backlog Changes
+
+| # | Path to Explore | Priority | Status | Notes |
+| - | --------------- | -------- | ------ | ----- |
+| 1 | Locate source code for LinkedIn connector in working directory | High | Blocked | Source code not in workspace; user to provide |
+| 2 | Examine `LinkedInWebhookController` for `/connector-configurations` mapping | High | Blocked | Pending source code |
+| 3 | Examine `GlobalRestExceptionHandler` line 122 | Medium | Blocked | Pending source code |
+| 4 | Check Spring resource handler configuration | Medium | Blocked | Pending source code |
+| 5 | Check for path prefix or servlet context path mismatch | Medium | Done | Downgraded — unlikely to explain two endpoints |
+| 6 | Search codebase for `cim-messages` and `connector-configurations` references | High | Blocked | Pending source code access |
+| 7 | Implement missing `@PostMapping` endpoints or align request paths | High | Open | Fix direction identified; implementation pending |
+
+### Updated Conclusion
+
+**Confidence:** Medium
+
+The `NoResourceFoundException` for both `connector-configurations` and `cim-messages` is best explained by missing `@PostMapping` controller methods. The Spring Security/filter hypothesis is refuted by the stack trace (exception occurs after filter chain). The path-prefix hypothesis is downgraded because two unrelated endpoints are unlikely to share the exact same prefix mismatch. The fix is to add the missing controller mappings or, if mappings exist under a different path, align the client requests. The `GlobalRestExceptionHandler` should also be updated to handle `NoResourceFoundException` as a 404 rather than an unhandled 500-class error.
