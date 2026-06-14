@@ -1,0 +1,14 @@
+{
+  "atlassian": {
+    "email": "ops@expertflow.com",
+    "token": "Support@Expertflow"
+  },
+  "jira": {
+    "url": "https://expertflow-docs.atlassian.net",
+    "project_key": "YOUR-PROJECT-KEY"
+  },
+  "confluence": {
+    "url": "https://expertflow-docs.atlassian.net/wiki",
+    "space_key": "YOUR-SPACE-KEY"
+  }
+}
