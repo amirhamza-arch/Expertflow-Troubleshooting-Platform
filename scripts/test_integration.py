@@ -15,6 +15,8 @@ def test_jira():
     client = JiraClient()
     print(f"URL: {client.url}")
     print(f"Project: {client.project_key}")
+    if client.project_key == "YOUR-PROJECT-KEY":
+        print("WARNING: project_key is still a placeholder. Update config/atlassian.json with your real project key.")
 
     # Try a lightweight search
     try:
@@ -31,6 +33,8 @@ def test_confluence():
     client = ConfluenceClient()
     print(f"URL: {client.url}")
     print(f"Space: {client.space_key}")
+    if client.space_key == "YOUR-SPACE-KEY":
+        print("WARNING: space_key is still a placeholder. Update config/atlassian.json with your real space key.")
 
     try:
         pages = client.search_cql(f"space = {client.space_key} ORDER BY lastModified DESC", limit=3)

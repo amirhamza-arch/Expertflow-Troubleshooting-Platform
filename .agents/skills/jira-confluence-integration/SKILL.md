@@ -4,10 +4,10 @@ This skill enables real-time interaction with Atlassian Cloud Jira and Confluenc
 
 ## Setup
 
-1. Copy `config/atlassian.yaml.template` to `config/atlassian.yaml`
+1. Copy `config/atlassian.json.template` to `config/atlassian.json`
 2. Fill in your credentials:
    - `email`: Your Atlassian Cloud account email
-   - `token`: An [API token](https://id.atlassian.com/manage-profile/security/api-tokens) (NOT your password)
+   - `token`: An [API token](https://id.atlassian.com/manage-profile/security/api-tokens) (NOT your password), or your account password if using Basic Auth
    - `jira.url`: `https://YOUR-DOMAIN.atlassian.net`
    - `jira.project_key`: e.g., `EF`, `CX`, `SUP`
    - `confluence.url`: `https://YOUR-DOMAIN.atlassian.net/wiki`

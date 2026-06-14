@@ -1,4 +1,5 @@
 # Local configuration with credentials
+config/atlassian.json
 config/atlassian.yaml
 
 # Python

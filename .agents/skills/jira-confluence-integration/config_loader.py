@@ -1,9 +1,9 @@
 """Load Atlassian configuration from config/atlassian.yaml"""
 import os
-import yaml
+import json
 
 CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "config", "atlassian.yaml"
+    os.path.dirname(__file__), "..", "..", "..", "config", "atlassian.json"
 )
 
 
@@ -12,10 +12,10 @@ def load_config():
     if not os.path.exists(CONFIG_PATH):
         raise FileNotFoundError(
             f"Config not found at {CONFIG_PATH}. "
-            "Please copy config/atlassian.yaml.template to config/atlassian.yaml and fill in your credentials."
+            "Please copy config/atlassian.json.template to config/atlassian.json and fill in your credentials."
         )
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return json.load(f)
 
 
 def get_auth():

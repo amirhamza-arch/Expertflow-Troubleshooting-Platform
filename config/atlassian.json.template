@@ -1,0 +1,14 @@
+{
+  "atlassian": {
+    "email": "your-email@example.com",
+    "token": "your-api-token-here"
+  },
+  "jira": {
+    "url": "https://YOUR-DOMAIN.atlassian.net",
+    "project_key": "YOUR-PROJECT-KEY"
+  },
+  "confluence": {
+    "url": "https://YOUR-DOMAIN.atlassian.net/wiki",
+    "space_key": "YOUR-SPACE-KEY"
+  }
+}
