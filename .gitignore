@@ -1,6 +1,6 @@
-# Local configuration with credentials
-config/atlassian.json
-config/atlassian.yaml
+# Local configuration with credentials (uncomment below if you want to hide credentials from git)
+# config/atlassian.json
+Config/atlassian.yaml
 
 # Python
 __pycache__/
